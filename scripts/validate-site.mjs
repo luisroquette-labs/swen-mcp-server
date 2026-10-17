@@ -14,5 +14,6 @@ if (h1Count !== 1) throw new Error(`Expected one H1, found ${h1Count}`);
 if (ids.length !== new Set(ids).size) throw new Error('Duplicate IDs found');
 if (tabs !== 3) throw new Error(`Expected three console tabs, found ${tabs}`);
 if (!html.includes('"rank": 1') || html.includes('"position": 1')) throw new Error('Ranking sample does not match the public contract');
+if (html.match(/<link rel="canonical" href="([^"]+)">/)?.[1] !== 'https://luisroquette-labs.github.io/swen-mcp-server/' || html.includes('cfgauss-ai')) throw new Error('Site still points to the previous GitHub owner');
 await Promise.all(refs.map((ref) => access(resolve(root, ref))));
 console.log(`Site validation passed: one H1, ${ids.length} unique IDs, three console tabs, exact ranking field, no missing assets`);

@@ -1,6 +1,6 @@
 # SWEN.AI MCP Server (reference source)
 
-[![Product site](https://img.shields.io/badge/product%20site-live-EC008C?style=flat-square)](https://cfgauss-ai.github.io/swen-mcp-server/)
+[![Product site](https://img.shields.io/badge/product%20site-live-EC008C?style=flat-square)](https://luisroquette-labs.github.io/swen-mcp-server/)
 
 This repository contains the **reference implementation** of the source code
 behind the public [Model Context Protocol](https://modelcontextprotocol.io)
