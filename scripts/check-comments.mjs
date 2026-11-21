@@ -31,7 +31,7 @@ function commentPositions(file, source) {
   }
   if (file.endsWith('.html')) {
     const positions = []
-    const html = source.replace(/(<(?:script|style)\b[^>]*>)([\s\S]*?)(<\/(?:script|style)>)/gi,
+    const html = source.replace(/(<(?:script|style)\b[^>]*>)([\s\S]*?)(<\/(?:script|style)\s*>)/gi,
       (_, open, body, close) => open + body.replace(/[^\n]/g, ' ') + close)
     let quote = ''
     let inTag = false
@@ -47,12 +47,12 @@ function commentPositions(file, source) {
       else if (html[i] === '<') inTag = true
       else if (html[i] === '>') inTag = false
     }
-    for (const match of source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
+    for (const match of source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)) {
       const content = match[1]
       const offset = match.index + match[0].indexOf(content)
       positions.push(...commentPositions('inline.js', content).map(pos => offset + pos))
     }
-    for (const match of source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
+    for (const match of source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)) {
       const content = match[1]
       const offset = match.index + match[0].indexOf(content)
       positions.push(...commentPositions('inline.css', content).map(pos => offset + pos))
@@ -72,6 +72,7 @@ if (process.argv.includes('--self-test')) {
   if (commentPositions('fixture.ts', 'const emoji="😀";const x="hi"// real\n').length !== 1) throw new Error('Unicode shifted a comment')
   if (commentPositions('fixture.ts', 'const emoji="😀";const x="hi"/* real */\n').length !== 1) throw new Error('Unicode shifted a block comment')
   if (commentPositions('fixture.html', '<a href="<!-- literal -->"><!-- real --></a><script>const x=1; // real\n</script>').length !== 2) throw new Error('HTML comment parsing failed')
+  if (commentPositions('fixture.html', '<script>const x=1; // real\n</script >').length !== 1) throw new Error('Spaced script end tag bypassed the lint')
   console.log('Comment parser self-test passed')
 } else {
   for (const file of files) {
