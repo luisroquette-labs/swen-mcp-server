@@ -1,9 +1,3 @@
-/**
- * Data fetchers for the AA-style /ranking page.
- * Each function returns top-N rows for a specific bar chart.
- * Uses direct REST calls to keep ISR-friendly (cached by tag).
- */
-
 import { filterFreshScores } from '@/lib/benchmark/freshness'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -14,8 +8,6 @@ const fetchOptions: RequestInit = {
     apikey: SUPABASE_KEY,
     Authorization: `Bearer ${SUPABASE_KEY}`,
   },
-  // 5min ISR fallback; tag 'ranking-aa' permite invalidação granular via
-  // /api/revalidate quando sync-benchmark-data ou snapshot-benchmark-scores rodam.
   next: { revalidate: 300, tags: ['ranking-aa'] },
 }
 
@@ -39,8 +31,6 @@ export interface BenchmarkTopRow {
   score: number
 }
 
-// ─── primitive fetchers ─────────────────────────────────────────────────────
-
 async function fetchActiveModels(): Promise<ModelInfo[]> {
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/ai_models?select=id,slug,nome,empresa,logo_url&status=eq.ativo&limit=1500`,
@@ -50,11 +40,6 @@ async function fetchActiveModels(): Promise<ModelInfo[]> {
   return res.json()
 }
 
-/**
- * @param guardFreshness descarta órfãos stale (ver lib/benchmark/freshness.ts).
- *   true para benchmarks geridos pelo sync da AA; false para benchmarks manuais
- *   (LMArena Elo), que não têm data_teste mantida pelo sync.
- */
 async function fetchBenchmarkScores(
   benchmarkName: string,
   limit = 100,
@@ -69,32 +54,14 @@ async function fetchBenchmarkScores(
   return guardFreshness ? filterFreshScores(rows) : rows
 }
 
-/** Strip vendor prefix ("OpenAI: GPT-5" → "GPT-5") for display */
 function cleanName(nome: string): string {
   return nome.replace(/^[^:]+:\s*/, '')
 }
 
-/**
- * Chave de família do modelo: nome sem prefixo de vendor e sem o sufixo
- * parentético de configuração ("GPT-5.6 Sol (max)" → "gpt-5.6 sol").
- * Regra editorial 17/07: o ranking exibe UMA entrada por modelo (a melhor
- * config), como o AA apresenta — variantes max/high/xhigh não inundam o topo.
- * MESMA regra vive no app iOS (swen-app/app/(tabs)/index.tsx) — mudar aqui
- * exige mudar lá (regression tests dos dois lados apontam um pro outro).
- */
 export function familyKey(nome: string): string {
   return cleanName(nome).replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase()
 }
 
-/**
- * Join+dedup canônico, SEM corte de topN — usado por qualquer consumidor que
- * já tenha buscado scores suficientes (site, API v1, MCP). Nunca duplicar
- * este map/sort/dedup em outro arquivo: se um consumidor reimplementa esta
- * lógica com o `nome` cru (com prefixo de vendor) em vez do `nome` limpo
- * pro desempate, o resultado diverge do site em empates de score — foi
- * exatamente esse tipo de bug que motivou a regra de 17/07 (site e app
- * DEVEM ser cópia fiel do AA, sem licença poética).
- */
 export function joinAndDedup(scores: ScoreRow[], models: Pick<ModelInfo, 'id' | 'slug' | 'nome' | 'empresa'>[]): BenchmarkTopRow[] {
   const modelById = new Map(models.map((m) => [m.id, m]))
   return scores
@@ -109,13 +76,7 @@ export function joinAndDedup(scores: ScoreRow[], models: Pick<ModelInfo, 'id' | 
       } as BenchmarkTopRow
     })
     .filter((r): r is BenchmarkTopRow => r !== null)
-    // Empate determinístico: score desc, nome asc — MESMA regra do app iOS.
-    // Antes o empate ficava na ordem física do REST (não-determinística), e o
-    // app resolvia por ELO: rankings divergiam em scores iguais (regra do
-    // usuário 17/07: app e site DEVEM ser idênticos, cópia fiel do AA).
     .sort((a, b) => b.score - a.score || a.nome.localeCompare(b.nome))
-    // Dedup por família: uma entrada por modelo, vence a melhor config
-    // (lista já ordenada — a primeira ocorrência é a maior).
     .filter((() => {
       const seen = new Set<string>()
       return (r: BenchmarkTopRow) => {
@@ -127,12 +88,9 @@ export function joinAndDedup(scores: ScoreRow[], models: Pick<ModelInfo, 'id' | 
     })())
 }
 
-/** Join scores with model info, return top-N (overshoot só compensa modelos inativos/duplicados no corte inicial). */
 function joinTop(scores: ScoreRow[], models: ModelInfo[], topN: number): BenchmarkTopRow[] {
   return joinAndDedup(scores.slice(0, topN * 3), models).slice(0, topN)
 }
-
-// ─── public composite fetchers ──────────────────────────────────────────────
 
 export interface RankingAAData {
   topIntelligence: BenchmarkTopRow[]
@@ -152,7 +110,6 @@ export interface RankingAAData {
   topLatency: BenchmarkTopRow[]
   topTtfa: BenchmarkTopRow[]
   topThroughput: BenchmarkTopRow[]
-  // Added 2026-05-22
   topSciCode: BenchmarkTopRow[]
   topIfBench: BenchmarkTopRow[]
   topAaLcr: BenchmarkTopRow[]
@@ -164,11 +121,9 @@ export interface RankingAAData {
 }
 
 export async function fetchRankingAAData(): Promise<RankingAAData> {
-  // Fetch active models once
   const models = await fetchActiveModels()
   const llmTypes = new Set(['texto', 'text', 'llm'])
   const llmModels = models.filter((m) => llmTypes.has((m as ModelInfo & { tipo?: string }).empresa ? '' : ''))
-  // Re-fetch with tipo to filter properly
   const modelsRes = await fetch(
     `${SUPABASE_URL}/rest/v1/ai_models?select=id,slug,nome,empresa,logo_url,tipo,velocidade_tokens_s,latencia_ttft,latencia_ttfa_s,preco_input_1m,context_window&status=eq.ativo&limit=1500`,
     fetchOptions,
@@ -185,9 +140,8 @@ export async function fetchRankingAAData(): Promise<RankingAAData> {
   > = modelsRes.ok ? await modelsRes.json() : []
 
   const llmList = fullModels.filter((m) => llmTypes.has(m.tipo))
-  void llmModels // silence unused
+  void llmModels
 
-  // Benchmark fetches in parallel
   const [
     intelligenceScores,
     codingScores,
@@ -222,7 +176,6 @@ export async function fetchRankingAAData(): Promise<RankingAAData> {
     fetchBenchmarkScores('Tau²-Bench', 100),
   ])
 
-  // Compute last sync date from intelligence benchmark
   let lastSyncDate: string | null = null
   try {
     const syncRes = await fetch(
@@ -234,10 +187,9 @@ export async function fetchRankingAAData(): Promise<RankingAAData> {
       lastSyncDate = arr[0]?.updated_at ?? null
     }
   } catch {
-    /* noop */
+
   }
 
-  // Top by performance metrics (from ai_models directly)
   const speedSorted = [...fullModels]
     .filter((m) => m.velocidade_tokens_s && m.velocidade_tokens_s > 0 && llmTypes.has(m.tipo))
     .sort((a, b) => (b.velocidade_tokens_s ?? 0) - (a.velocidade_tokens_s ?? 0))
@@ -285,14 +237,12 @@ export async function fetchRankingAAData(): Promise<RankingAAData> {
     topTtfa: ttfaSorted.map((m) => ({ slug: m.slug, nome: cleanName(m.nome), empresa: m.empresa, score: m.latencia_ttfa_s ?? 0 })),
     topCheapest: cheapestSorted.map((m) => ({ slug: m.slug, nome: cleanName(m.nome), empresa: m.empresa, score: m.preco_input_1m ?? 0 })),
     topContext: contextSorted.map((m) => ({ slug: m.slug, nome: cleanName(m.nome), empresa: m.empresa, score: m.context_window ?? 0 })),
-    topThroughput: [], // placeholder — no field for total throughput yet
+    topThroughput: [],
     totalModels: fullModels.length,
     totalActiveLLMs: llmList.length,
     lastSyncDate,
   }
 }
-
-// ─── video models leaderboard (from specs.nota) ────────────────────────────
 
 export interface VideoModelRow {
   slug: string
@@ -328,8 +278,6 @@ export async function fetchTopVideoModels(): Promise<VideoModelRow[]> {
     .sort((a, b) => b.nota - a.nota)
 }
 
-// ─── time series fetch (Intelligence over time) ────────────────────────────
-
 export interface TimeSeriesPoint {
   date: string
   score: number
@@ -342,10 +290,6 @@ export interface TimeSeriesEntry {
   points: TimeSeriesPoint[]
 }
 
-/**
- * Fetch historical snapshots for the top-N models on a given benchmark.
- * Returns a series per model with all daily points in the window.
- */
 export async function fetchIntelligenceTimeSeries(opts: {
   benchmarkNome?: string
   topModelIds?: string[]
@@ -356,7 +300,6 @@ export async function fetchIntelligenceTimeSeries(opts: {
   const windowDays = opts.windowDays ?? 30
   const since = new Date(Date.now() - windowDays * 86400_000).toISOString().split('T')[0]
 
-  // If topModelIds not given, derive from current top-10 of this benchmark
   let topIds = opts.topModelIds ?? []
   if (topIds.length === 0) {
     const currentRes = await fetch(
@@ -370,7 +313,6 @@ export async function fetchIntelligenceTimeSeries(opts: {
   }
   if (topIds.length === 0) return []
 
-  // Models (for label/company); use provided list or fetch
   let models = opts.models
   if (!models) {
     const mRes = await fetch(
@@ -381,7 +323,6 @@ export async function fetchIntelligenceTimeSeries(opts: {
   }
   const modelById = new Map((models ?? []).map((m) => [m.id, m]))
 
-  // Fetch all snapshots for these model_ids in the window
   const idsParam = topIds.join(',')
   const snapRes = await fetch(
     `${SUPABASE_URL}/rest/v1/ai_model_score_snapshots?select=model_id,score,snapshot_date&benchmark_nome=eq.${encodeURIComponent(benchmarkNome)}&snapshot_date=gte.${since}&model_id=in.(${idsParam})&order=snapshot_date.asc&limit=2000`,
@@ -390,7 +331,6 @@ export async function fetchIntelligenceTimeSeries(opts: {
   if (!snapRes.ok) return []
   const snapshots: { model_id: string; score: number; snapshot_date: string }[] = await snapRes.json()
 
-  // Group by model
   const byModel = new Map<string, TimeSeriesPoint[]>()
   for (const s of snapshots) {
     const arr = byModel.get(s.model_id) ?? []
@@ -411,8 +351,6 @@ export async function fetchIntelligenceTimeSeries(opts: {
     })
     .filter((e): e is TimeSeriesEntry => e !== null)
 }
-
-// ─── helpers for the page ──────────────────────────────────────────────────
 
 export function rowsFromBenchmarkTop(
   rows: BenchmarkTopRow[],

@@ -1,15 +1,3 @@
-/**
- * Servidor MCP público (Fase 2, 17/07/2026) — expõe as MESMAS 4 fontes da API
- * REST v1 como "tools" pra agentes de IA (Claude, ChatGPT, Cursor). Zero
- * lógica de negócio própria: cada tool chama o fetcher/mapper JÁ existente da
- * API REST — se a regra de ranking mudar em fetch-aa.ts/fetchers.ts, os 3
- * consumidores (site, app, API REST, MCP) convergem juntos.
- *
- * Decisão 17/07: MCP não exige API key (maximiza adoção por agentes = maximiza
- * citação — a jogada GEO). Só rate limit por IP, mais generoso que o tier
- * anônimo da REST (conversas de agente chamam várias tools por turno).
- */
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import {
@@ -27,9 +15,6 @@ function textResult(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
 }
 
-// isError: true sinaliza erro no nível do protocolo MCP (não só um JSON com
-// campo "error") — clientes que checam result.isError distinguem 404 de
-// sucesso sem precisar fazer parsing heurístico do texto retornado.
 function errorResult(message: string) {
   return { content: [{ type: 'text' as const, text: JSON.stringify({ error: message }, null, 2) }], isError: true }
 }

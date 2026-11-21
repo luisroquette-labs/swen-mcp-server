@@ -1,10 +1,3 @@
-/**
- * Fetchers da API v1 — REST direto ao Supabase com a anon key (mesmo padrão
- * das rotas internas /api/benchmark, /api/ferramentas, /api/tutoriais: o
- * conteúdo já é público via RLS, a API key da SWEN serve pra identificar o
- * consumidor e aplicar rate limit, não pra portar dados privados).
- */
-
 import { joinAndDedup } from '@/lib/ranking/fetch-aa'
 import { filterFreshScores } from '@/lib/benchmark/freshness'
 import type { NoticiaRow, ModelRow, ToolRow, TutorialRow } from './mappers'
@@ -23,9 +16,6 @@ async function restGet<T>(path: string, rangeHeader?: string): Promise<T[]> {
     headers: { ...fetchOptions.headers, ...(rangeHeader ? { Range: rangeHeader } : {}) },
   })
   if (!res.ok) {
-    // Nunca deixar uma falha de infra (5xx do Supabase) virar silenciosamente
-    // "sem resultados" pro consumidor da API — loga pro maintainer conseguir
-    // distinguir "sem notícias hoje" de "Supabase caiu" nos logs da Vercel.
     console.error(`[api-v1] restGet falhou: ${path} → ${res.status}`)
     return []
   }
@@ -85,8 +75,6 @@ export async function fetchTutorialsList(opts: { limit: number; offset: number }
   )
 }
 
-// ─── ranking (reusa a regra canônica — NUNCA reimplementar dedup/desempate) ──
-
 interface RankingSourceRow {
   slug: string
   nome: string
@@ -94,15 +82,6 @@ interface RankingSourceRow {
   score: number
 }
 
-/**
- * Ranking Score AA da API v1 — MESMA regra canônica do site/app (regra
- * 17/07/2026: "não há licença poética"). Chama joinAndDedup() (fetch-aa.ts)
- * diretamente — nunca duplicar esse map/sort/dedup aqui; se a regra mudar,
- * muda em fetch-aa.ts e os 3 consumidores (site, app, API) convergem juntos
- * pelos testes de paridade já existentes. Sem overshoot-slice aqui (ao
- * contrário do joinTop do site): já buscamos scores/limit=1000, headroom
- * suficiente pro limit máximo da rota (100).
- */
 export async function fetchIntelligenceRanking(limit: number): Promise<RankingSourceRow[]> {
   const [models, scores] = await Promise.all([
     restGet<{ id: string; slug: string; nome: string; empresa: string }>(

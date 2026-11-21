@@ -1,10 +1,3 @@
-/**
- * Contrato ESTÁVEL da API pública v1 (swen.ia.br/api/v1). Campos em inglês,
- * nomenclatura própria — nunca o nome de coluna interno cru (regra 17/07/2026:
- * se renomearmos uma coluna do banco amanhã, terceiro não pode quebrar em
- * produção sem aviso; a tradução acontece nos mappers, não aqui).
- */
-
 export interface NewsItem {
   slug: string
   title: string
@@ -13,7 +6,7 @@ export interface NewsItem {
   publishedAt: string | null
   updatedAt: string | null
   source: string | null
-  url: string // link canônico pro artigo em swen.ia.br — NUNCA o corpo completo no tier público
+  url: string
   imageUrl: string | null
 }
 
