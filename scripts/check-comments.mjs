@@ -7,7 +7,7 @@ const failures = []
 
 function commentPositions(file, source) {
   if (/\.[cm]?[jt]sx?$/.test(file)) {
-    const masked = [...source]
+    const masked = source.split('')
     const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
     const literals = new Set([
       ts.SyntaxKind.StringLiteral,
@@ -69,6 +69,8 @@ function commentPositions(file, source) {
 if (process.argv.includes('--self-test')) {
   const fixture = 'const url = "https://example.com"; const regex = /[//]/; const x = `${1 /* real */}`; // real\n'
   if (commentPositions('fixture.ts', fixture).length !== 2) throw new Error('TypeScript comment parsing failed')
+  if (commentPositions('fixture.ts', 'const emoji="😀";const x="hi"// real\n').length !== 1) throw new Error('Unicode shifted a comment')
+  if (commentPositions('fixture.ts', 'const emoji="😀";const x="hi"/* real */\n').length !== 1) throw new Error('Unicode shifted a block comment')
   if (commentPositions('fixture.html', '<a href="<!-- literal -->"><!-- real --></a><script>const x=1; // real\n</script>').length !== 2) throw new Error('HTML comment parsing failed')
   console.log('Comment parser self-test passed')
 } else {
