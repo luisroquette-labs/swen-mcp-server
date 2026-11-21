@@ -1,11 +1,3 @@
-# Runs the reference MCP server over stdio for registry introspection
-# (e.g. Glama). Production traffic never touches this image — the real
-# server runs on Vercel behind Streamable HTTP at https://swen.ia.br/api/mcp.
-#
-# The two env vars below are PUBLIC by design: NEXT_PUBLIC_* variables ship
-# in every browser bundle on swen.ia.br already, and the Supabase key is the
-# anon key, scoped by Postgres Row Level Security rather than by secrecy.
-# See README.md "Security" for what is intentionally excluded from this repo.
 FROM node:22-slim
 
 WORKDIR /app

@@ -1,13 +1,6 @@
-/**
- * Mappers puros: linha crua do Supabase → contrato estável da API v1.
- * Zero I/O aqui de propósito — são testados com fixtures, sem rede
- * (src/__tests__/api-v1-contract.regression.test.ts trava o shape exato).
- */
-
 import { buildCanonicalUrl } from '@/lib/canonicalDomain'
 import type { NewsItem, ModelItem, RankingItem, ToolItem, TutorialItem } from './types'
 
-/** Strip vendor prefix ("OpenAI: GPT-5" → "GPT-5") — mesma regra do ranking. */
 function cleanName(nome: string): string {
   return nome.replace(/^[^:]+:\s*/, '')
 }
@@ -23,8 +16,6 @@ export interface NoticiaRow {
   imagem_url: string | null
 }
 
-// Regra 17/07: tier público NUNCA recebe o corpo completo do artigo — só
-// resumo + link canônico. Protege o tráfego do portal (o clique é o produto).
 export function toNewsItem(row: NoticiaRow): NewsItem {
   return {
     slug: row.slug,
@@ -70,7 +61,6 @@ export function toModelItem(row: ModelRow): ModelItem {
   }
 }
 
-/** rank é atribuído pelo caller (posição na lista já ordenada/deduplicada). */
 export function toRankingItem(row: { slug: string; nome: string; empresa: string; score: number }, rank: number): RankingItem {
   return {
     rank,

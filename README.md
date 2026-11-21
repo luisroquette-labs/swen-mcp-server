@@ -70,8 +70,9 @@ src/lib/i18n/
   config.ts         locale constants used by the mappers
 ```
 
-These are copied byte-for-byte from the production repo. They are kept in
-sync manually; they may lag the deployed version slightly.
+These are copied from the production repo, with code comments moved to
+[architecture decision records](docs/adr/). They are kept in sync manually;
+they may lag the deployed version slightly.
 
 ## Also see
 
